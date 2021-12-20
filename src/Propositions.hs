@@ -21,7 +21,7 @@ data Proposition
   | Evals   Expr Expr 
 
 data HasType where 
-     TApp :: Env -> Expr -> Expr -> Type -> Var ->  Type -> HasType -> HasType -> HasType
+     TApp :: Env -> Expr -> Expr -> Type -> Var -> Type -> HasType -> HasType -> HasType
      TLam :: Env -> Var -> Expr -> Type -> Type -> HasType -> HasType
      TVar :: Env -> Var -> Type -> HasType
      TCon :: Env -> EPrim -> HasType 
@@ -60,7 +60,7 @@ data Step where
   SAppPL :: e1:Expr -> e1':Expr -> e2:Expr 
          -> Prop (Step e1 e1')
          -> Prop (Step (EApp e1 e2) (EApp e1' e2)) 
-  SAppPR :: e1:Expr -> e2:Expr -> e2':Expr 
+  SAppPR :: e1:{Expr | isValue e1 } -> e2:Expr -> e2':Expr 
          -> Prop (Step e2 e2')
          -> Prop (Step (EApp e1 e2) (EApp e1 e2')) 
   SAppEL :: x:Var -> e:Expr -> ex:Expr 
