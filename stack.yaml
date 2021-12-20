@@ -1,0 +1,29 @@
+resolver: lts-18.18
+packages:
+  - .
+extra-deps:
+  - text-format-0.3.2
+  - Diff-0.3.4
+  - rest-rewrite-0.1.1
+  - location:
+    git: https://github.com/ucsd-progsys/liquidhaskell
+    commit: d83ade809630755bc6f9d195aa6aaf1b76955819
+  - location: 
+    git: https://github.com/liquidhaskell/liquid-base
+    commit: 6f00234715541d5065d128e5b7baec3b2c4a37a1 
+  - liquid-prelude-0.8.10.2 
+  - location: 
+    git: https://github.com/liquidhaskell/liquid-containers
+    commit: 07e0fa0beacc609ad2ac1009c84dfa78c87ea8bc
+  - liquid-ghc-prim-0.6.1
+  - location: 
+    git: https://github.com/ucsd-progsys/liquid-fixpoint
+    commit: 33b0dec432b4cc3f911fac77e6819f1e35b0d6cc
+#  - ../../liquidtypes/liquidhaskell
+#  - ../../liquidtypes/liquidhaskell/liquid-base
+#  - ../../liquidtypes/liquidhaskell/liquid-containers
+#  - ../../liquidtypes/liquidhaskell/liquid-prelude
+#  - ../../liquidtypes/liquidhaskell/liquid-ghc-prim
+#  - ../../liquidtypes/liquidhaskell/liquid-fixpoint
+
+allow-newer: true
