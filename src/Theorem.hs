@@ -28,8 +28,8 @@ progress :: Expr -> Type -> HasType -> Either () (Expr, Step)
 {-@ progress :: e:Expr -> t:Type -> ht:Prop (HasType EEmp e t) 
                  -> Either {v:() | isValue e} (Expr, Step)<{\e' p -> prop p = Step e e'}> 
                  / [hasTypeSize ht] @-}
-progress (EApp e ex) _ (TApp _ _ _ t tx e_hastype_txt ex_hastype_tx)
-  = Right (progressApp e ex t tx e_hastype_txt ex_hastype_tx)  
+progress (EApp e ex) _ (TApp _ _ _ t x tx e_hastype_txt ex_hastype_tx)
+  = Right (progressApp e ex t x tx e_hastype_txt ex_hastype_tx)  
 progress _ _ (TLam _ _ _ _ _ _)
   = Left () 
 progress _ _ (TVar _ _ _ )
@@ -37,29 +37,29 @@ progress _ _ (TVar _ _ _ )
 progress _ _ (TCon _ _)
   = Left () 
 
-{-@ progressApp :: e:Expr -> ex:Expr -> t:Type -> tx:Type 
-                -> ht1: Prop (HasType EEmp e (TFun tx t)) 
+{-@ progressApp :: e:Expr -> ex:Expr -> t:Type -> x:Var -> tx:Type 
+                -> ht1: Prop (HasType EEmp e (TFun x tx t)) 
                 -> ht2: Prop (HasType EEmp ex tx) 
                 -> (Expr, Step)<{\e' p -> prop p = Step (EApp e ex) e'}> 
                 /  [hasTypeSize ht1 + hasTypeSize ht2 ] @-}
-progressApp :: Expr -> Expr -> Type -> Type -> HasType -> HasType -> (Expr,Step) 
-progressApp e ex t tx e_hastype_txt ex_hastype_tx 
-  = case progress e (TFun tx t) e_hastype_txt of 
+progressApp :: Expr -> Expr -> Type -> Var -> Type -> HasType -> HasType -> (Expr,Step) 
+progressApp e ex t x tx e_hastype_txt ex_hastype_tx 
+  = case progress e (TFun x tx t) e_hastype_txt of 
       Left _ -> case progress ex tx ex_hastype_tx of 
-                 Left _ -> case canonicalForm tx t e e_hastype_txt of 
+                 Left _ -> case canonicalForm x tx t e e_hastype_txt of 
                              Left (x,ee) -> (subst ee x ex, SAppEL x ee ex)  
                              Right p     -> (delta p ex, SAppEP p ex)  
                  Right (ex', ex_step_ex') -> (EApp e ex', SAppPR e ex ex' ex_step_ex') 
       Right (e',e_step_e') -> (EApp e' ex, SAppPL e e' ex e_step_e')   
 
 
-{-@ canonicalForm :: tx:Type -> t:Type -> v:{Expr | isValue v } 
-                  -> Prop (HasType EEmp v (TFun tx t)) 
+{-@ canonicalForm :: x:Var -> tx:Type -> t:Type -> v:{Expr | isValue v } 
+                  -> Prop (HasType EEmp v (TFun x tx t)) 
                   -> Either ((Var, Expr)<{\x e -> v == ELam x e}>) {p:EPrim | v == EPrim p } @-}
-canonicalForm :: Type -> Type -> Expr -> HasType -> Either (Var,Expr) EPrim
-canonicalForm _ _ (ELam x e) _ = Left (x,e)
-canonicalForm _ _ (EPrim c)  _ = Right c 
-canonicalForm _ _ _ _ = error ""
+canonicalForm :: Var -> Type -> Type -> Expr -> HasType -> Either (Var,Expr) EPrim
+canonicalForm _ _ _ (ELam x e) _ = Left (x,e)
+canonicalForm _ _ _ (EPrim c)  _ = Right c 
+canonicalForm _ _ _ _ _ = error ""
 
 preservation :: Expr -> Type -> HasType -> Expr -> Step -> HasType 
 {-@ preservation :: e:Expr -> t:Type -> hs:Prop (HasType EEmp e t) 
@@ -72,28 +72,28 @@ preservation e t (TLam _ _ _ _ _ _) e' e_step_e'
   = values_dont_step e e' e_step_e'
 preservation (EVar x) t (TVar _ _ _) e' e_step_e' 
   = error "empty-environment" 
-preservation (EApp e ex) t (TApp EEmp _e _ex _t tx e_hastype_txt ex_hastype_tx) e' e_step_e' 
-  = preservationApp e ex t tx e_hastype_txt ex_hastype_tx e' e_step_e'
+preservation (EApp e ex) t (TApp EEmp _e _ex _t x tx e_hastype_txt ex_hastype_tx) e' e_step_e' 
+  = preservationApp e ex t x tx e_hastype_txt ex_hastype_tx e' e_step_e'
 
 
-{-@ preservationApp :: e:Expr -> ex:Expr -> t:Type -> tx:Type 
-                    -> ht1:Prop (HasType EEmp e (TFun tx t)) 
+{-@ preservationApp :: e:Expr -> ex:Expr -> t:Type -> x:Var -> tx:Type 
+                    -> ht1:Prop (HasType EEmp e (TFun x tx t)) 
                     -> ht2:Prop (HasType EEmp ex tx) 
                     -> e':Expr 
                     -> Prop (Step (EApp e ex) e') 
                     -> Prop (HasType EEmp e' t) 
                     /  [hasTypeSize ht1 + hasTypeSize ht2 ] @-}
-preservationApp :: Expr -> Expr -> Type -> Type -> HasType -> HasType -> Expr -> Step -> HasType
-preservationApp e ex t tx e_hastype ex_hastype _ (SAppPL _e e' _ex e_step_e')
-  = TApp EEmp e' ex t tx (preservation e (TFun tx t) e_hastype e' e_step_e') ex_hastype 
-preservationApp e ex t tx e_hastype ex_hastype e' (SAppPR _ _ ex' ex_step_ex')
-  = TApp EEmp e ex' t tx e_hastype (preservation ex tx ex_hastype ex' ex_step_ex') 
-preservationApp _ _ t tx e_hastype ex_hastype e' (SAppEL x e ex)
+preservationApp :: Expr -> Expr -> Type -> Var -> Type -> HasType -> HasType -> Expr -> Step -> HasType
+preservationApp e ex t x tx e_hastype ex_hastype _ (SAppPL _e e' _ex e_step_e')
+  = TApp EEmp e' ex t x tx (preservation e (TFun x tx t) e_hastype e' e_step_e') ex_hastype 
+preservationApp e ex t x tx e_hastype ex_hastype e' (SAppPR _ _ ex' ex_step_ex')
+  = TApp EEmp e ex' t x tx e_hastype (preservation ex tx ex_hastype ex' ex_step_ex') 
+preservationApp _ _ t _ tx e_hastype ex_hastype e' (SAppEL x e ex)
   = case e_hastype of 
       TLam _ _ _ _ _ e_hastype'  -> 
         substitution_lemma EEmp EEmp x ex tx e t ex_hastype e_hastype'
-preservationApp _ _ t tx e_hastype ex_hastype e' (SAppEP p ex)
+preservationApp _ _ t x tx e_hastype ex_hastype e' (SAppEP p ex)
   = case e_hastype of 
-      TCon _ _  -> primAss tx t p ex EEmp ex_hastype
+      TCon _ _  -> primAss x tx t p ex EEmp ex_hastype
 
 

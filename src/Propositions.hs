@@ -21,32 +21,32 @@ data Proposition
   | Evals   Expr Expr 
 
 data HasType where 
-     TApp :: Env -> Expr -> Expr -> Type -> Type -> HasType -> HasType -> HasType
+     TApp :: Env -> Expr -> Expr -> Type -> Var ->  Type -> HasType -> HasType -> HasType
      TLam :: Env -> Var -> Expr -> Type -> Type -> HasType -> HasType
      TVar :: Env -> Var -> Type -> HasType
      TCon :: Env -> EPrim -> HasType 
 
 {-@ data HasType where 
-     TApp :: g:Env -> e:Expr -> ex:Expr -> t:Type -> tx:Type 
-            -> Prop (HasType g e (TFun tx t)) 
+     TApp :: g:Env -> e:Expr -> ex:Expr -> t:Type -> x:Var -> tx:Type 
+            -> Prop (HasType g e (TFun x tx t)) 
             -> Prop (HasType g ex tx)
             -> Prop (HasType g (EApp e ex) t) 
      TLam  :: g:Env -> x:Var -> e:Expr -> tx:Type -> t:Type 
             -> Prop (HasType (EBind x tx g) e t) 
-            -> Prop (HasType g (ELam x e) (TFun tx t)) 
+            -> Prop (HasType g (ELam x e) (TFun x tx t)) 
      TVar  :: g:Env -> x:Var -> t:{Type | inEnv x t g}
            -> Prop (HasType g (EVar x) t)
      TCon :: g:Env -> p:EPrim
-           -> Prop (HasType g (EPrim p) (Types.primType p))
+           -> Prop (HasType g (EPrim p) (primType p))
  @-}
 
 hasTypeSize :: HasType -> Int  
 {-@ hasTypeSize :: HasType -> {v:Int | 0 < v } @-}
 {-@ measure hasTypeSize @-}
-hasTypeSize (TCon _ _)               = 1 
-hasTypeSize (TVar _ _ _)             = 1 
-hasTypeSize (TLam _ _ _ _ _ ht)      = hasTypeSize ht + 1 
-hasTypeSize (TApp _ _ _ _ _ ht1 ht2) = hasTypeSize ht1 + hasTypeSize ht2 + 1 
+hasTypeSize (TCon _ _)                 = 1 
+hasTypeSize (TVar _ _ _)               = 1 
+hasTypeSize (TLam _ _ _ _ _ ht)        = hasTypeSize ht + 1 
+hasTypeSize (TApp _ _ _ _ _ _ ht1 ht2) = hasTypeSize ht1 + hasTypeSize ht2 + 1 
 
 
 data Step where 

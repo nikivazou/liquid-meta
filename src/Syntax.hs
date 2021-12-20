@@ -17,7 +17,12 @@ data Expr = EApp Expr Expr
 data TBase   = TPrim TPrim
   deriving Eq 
 
-data Type    = TBase TBase | TFun Type Type 
+
+data Predicate = PTop 
+  deriving Eq 
+
+data Type    = TBase TBase Predicate
+             | TFun Var Type Type 
   deriving Eq 
 
 data Env = EEmp | EBind Var Type Env
