@@ -1,6 +1,6 @@
 {-@ LIQUID "--reflection" @-}
 
-module Substitutions where 
+module Substitutions.Expressions where 
 
 import Syntax 
 

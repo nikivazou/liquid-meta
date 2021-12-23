@@ -23,6 +23,7 @@ data Predicate = PTop
 
 data Type    = TBase TBase Predicate
              | TFun Var Type Type 
+             | TEx  Var Type Type 
   deriving Eq 
 
 data Env = EEmp | EBind Var Type Env

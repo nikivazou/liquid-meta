@@ -5,7 +5,7 @@ module Lemmata.ValuesDontStep where
 
 import Syntax
 import Expressions 
-import Substitutions
+import Substitutions.Expressions
 import Propositions
 import Helpers.ProofCombinators
 

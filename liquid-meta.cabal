@@ -17,11 +17,14 @@ library
       Constants, 
       Expressions, 
       Types, 
-      Substitutions,
+      Substitutions.Expressions,
+      Substitutions.Types,
       Environments, 
       Propositions, 
       Lemmata.ValuesDontStep,
       Lemmata.Substitution,
+      Lemmata.Narrowing,
+      Lemmata.Subtyping,
       Assumptions.Constants,
       Theorem  
   hs-source-dirs:
