@@ -8,8 +8,9 @@ import Environments
 import Substitutions.Expressions 
 import Substitutions.Types 
 import Types 
-import Expressions 
+import Expressions
 import Constants
+import Data.Set 
 
 {-@ type Prop E = {propBind:_ | prop propBind = E } @-}
 {-@ measure prop :: a -> Proposition @-}
@@ -18,16 +19,39 @@ import Constants
 assertProp :: Proposition -> a -> a 
 assertProp _ x = x 
 
+{-@ todoProp :: p:Proposition -> Proposition -> Prop p @-}
+todoProp :: Proposition -> Proposition -> a 
+todoProp _ _ = undefined -- SAFE undefined
+
+
 {-@ assume assumeProp :: p:Proposition  -> Prop p @-}
-assumeProp :: Proposition -> a  
-assumeProp _ = undefined 
+assumeProp :: Proposition -> a
+assumeProp _ = undefined -- SAFE undefined 
 
 
 data Proposition 
   = HasType   Env Expr Type 
   | IsSubType Env Type Type 
+  | IsWellFormed Env Type 
+  | Implies   Env Expr Expr  
   | Step      Expr Expr 
   | Evals     Expr Expr 
+  | TODO
+
+data IsWellFormed where 
+  WFFun :: Env -> Var -> Type -> Type -> IsWellFormed -> IsWellFormed -> IsWellFormed  
+  WFEx  :: Env -> Var -> Type -> Type -> IsWellFormed -> IsWellFormed -> IsWellFormed  
+
+{-@ data IsWellFormed where 
+     WFFun :: g:Env -> x:{Var | not (member x (dom g))} -> tx:Type -> t:Type 
+           -> Prop (IsWellFormed g tx)
+           -> Prop (IsWellFormed (EBind x tx g) t)
+           -> Prop (IsWellFormed g (TFun x tx t)) 
+     WFEx  :: g:Env -> x:{Var | not (member x (dom g))} -> tx:Type -> t:Type 
+           -> Prop (IsWellFormed g tx)
+           -> Prop (IsWellFormed (EBind x tx g) t)
+           -> Prop (IsWellFormed g (TEx x tx t)) 
+  @-}
 
 data HasType where 
      TApp :: Env -> Expr -> Expr -> Type -> Var -> Type -> HasType -> HasType -> HasType
@@ -64,31 +88,54 @@ hasTypeSize (TSub _ _ _ _ ht st)       = hasTypeSize ht  + isSubTypeSize st + 1
 
 
 data IsSubType where 
-  SBase :: Env -> TBase -> Predicate -> Predicate -> IsSubType 
+  SBase :: Env -> TBase -> Expr -> Expr -> Implies -> IsSubType 
   SFun  :: Env -> Var -> Type -> Type -> Type -> Type -> IsSubType -> IsSubType -> IsSubType  
   SWit  :: Env -> Var -> Type -> Expr -> Type -> Type -> HasType -> IsSubType -> IsSubType  
+  SBnd  :: Env -> Var -> Type -> Type -> Type -> IsSubType -> IsSubType  
 
 
 {-@ data IsSubType where 
-     SBase :: g:Env -> b:TBase -> p1:Predicate -> p2:Predicate 
-           -> Prop (IsSubType g (TBase b p1) (TBase b p2)) 
+     SBase :: g:Env -> b:TBase -> p1:Expr -> p2:Expr 
+           -> Prop (Implies (EBind pvar (TBase b top) g) p1 p2)
+           -> Prop (IsSubType g (TBase b (Predicate pvar p1)) (TBase b (Predicate pvar p2))) 
      SFun  :: g:Env -> x:Var -> s1:Type -> s2:Type -> t1:Type -> t2:Type 
            -> Prop (IsSubType g s2 s1)
            -> Prop (IsSubType (EBind x s2 g) t1 t2)
            -> Prop (IsSubType g (TFun x s1 t1) (TFun x s2 t2)) 
      SWit  :: g:Env -> x:Var -> tx:Type -> ex:Expr -> s:Type -> t:Type 
            -> Prop (HasType g ex tx)
-           -> Prop (IsSubType g s (Substitutions.Types.subst t x ex ))
+           -> Prop (IsSubType g s (Substitutions.Types.subst t x ex))
            -> Prop (IsSubType g s (TEx x tx t)) 
+     SBnd  :: g:Env -> x:{Var | not (member x (dom g))} -> sx:Type -> s:Type 
+           -> t:{Type | not (member x (Types.freeVars t))} 
+           -> Prop (IsSubType (EBind x sx g) s t)
+           -> Prop (IsSubType g (TEx x sx s) t) 
 @-}
+
+-- NV: LH TOFIX This is required to properly import member in the logic.... 
+isMember :: Int -> Set Int -> Bool 
+isMember = member 
 
 
 isSubTypeSize :: IsSubType -> Int  
 {-@ isSubTypeSize :: IsSubType -> {v:Int | 0 < v } @-}
 {-@ measure isSubTypeSize @-}
-isSubTypeSize (SBase _ _ _ _)            = 1 
+isSubTypeSize (SBase _ _ _ _ _)          = 1 
 isSubTypeSize (SFun _ _ _ _ _ _ st1 st2) = 1 + isSubTypeSize st1 + isSubTypeSize st2  
 isSubTypeSize (SWit _ _ _ _ _ _ t1 st2)  = 1 + hasTypeSize t1 + isSubTypeSize st2  
+isSubTypeSize (SBnd _ _ _ _ _ st)        = 1 + isSubTypeSize st  
+
+data Implies where 
+  IRefl  :: Env -> Expr -> Implies 
+  ITrans :: Env -> Expr -> Expr -> Expr -> Implies -> Implies -> Implies 
+
+{-@ data Implies where 
+      IRefl  :: g:Env -> e:Expr -> Prop (Implies g e e)  
+      ITrans :: g:Env -> e1:Expr -> e2:Expr -> e3:Expr
+             -> Prop (Implies g e1 e2)  
+             -> Prop (Implies g e2 e3)  
+             -> Prop (Implies g e1 e3)  
+  @-}
 
 
 data Step where 

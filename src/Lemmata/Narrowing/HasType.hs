@@ -1,4 +1,4 @@
-module Lemmata.Narrowing where 
+module Lemmata.Narrowing.HasType where 
 
 import Syntax 
 import Propositions 

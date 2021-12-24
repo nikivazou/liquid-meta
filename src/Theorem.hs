@@ -18,7 +18,7 @@ import Helpers.ProofCombinators
 import Lemmata.ValuesDontStep
 import qualified Lemmata.Substitution
 import Lemmata.Subtyping
-import Lemmata.Narrowing
+import Lemmata.Narrowing.HasType
 import Assumptions.Constants
 
 soundness :: Expr -> Type -> HasType -> Expr -> Evals -> Either () (Expr, Step) 
@@ -114,6 +114,7 @@ preservationApp _ _ t x tx e_hastype ex_hastype e' (SAppEP p ex)
               )
             )
         )   
+      _ -> undefined
 
 {-@ exLemma ::  x:Var -> ex:Expr -> e:Expr -> tx:Type -> s:Type -> t:Type 
              -> Prop (HasType EEmp ex tx)
@@ -137,9 +138,9 @@ exLemma x ex e tx s t ex_hastype_tx s_issub_t e_hastype_s
                -> Prop (HasType g (EPrim p) t) 
                -> Prop (IsSubType g (primType p) t ) @-}
 inverseCon :: Env -> EPrim -> Type -> HasType -> IsSubType
-inverseCon g p t (TCon _ _ ) = subtypeId g t 
+inverseCon g p t (TCon _ _ ) = undefined -- subtypeId g t 
 inverseCon g p t (TSub _ _ s _t p_hastype_s s_subtype_t) 
-  = subtypeTrans g (primType p) s t (inverseCon g p s p_hastype_s) s_subtype_t  
+  = undefined -- subtypeTrans g (primType p) s t (inverseCon g p s p_hastype_s) s_subtype_t  
 
 
 
@@ -151,6 +152,7 @@ inverseLam' :: Env -> Var -> Var -> Expr -> Type -> Type -> HasType -> ()
 inverseLam' g y x e tx t (TLam _ _ _ _ _ _) = () 
 inverseLam' g y x e tx t (TSub _ _ _ _ e_hastype_s (SFun _ _ sx _ s _ _ _)) = 
   inverseLam' g y x e sx s e_hastype_s  
+inverseLam' g y x e tx t (TSub _ _ _ _ e_hastype_s _) = undefined  
 
 {-@ inverseLam :: g:Env -> x:Var -> e:Expr -> tx:Type -> t:Type 
            -> ht:Prop (HasType g (ELam x e) (TFun x tx t))
@@ -170,5 +172,5 @@ inverseLam g _x e tx t (TSub _ _e ss _ e_hastype_s (
            )
         )
       )) s_issub_t
-    
-
+inverseLam g _x e tx t (TSub _ _e ss _ e_hastype_s _)
+  = undefined 
