@@ -22,15 +22,34 @@ lookupEnv (EBind x t g) y
   | otherwise = lookupEnv g y 
 
 
-
-{- ple fresh @-}
-{- fresh :: g:Env -> {x:Var | not (member x (dom g))} @-}
+{-@ reflect fresh @-}
+{-@ fresh :: g:Env -> {x:Var | not (member x (dom g))} @-}
 fresh :: Env -> Var 
-fresh EEmp = 1 
-fresh (EBind x tx g) 
-  = case fresh g of 
-       y -> if x >= y then x + 1 else y 
+fresh g = case domList g of 
+           [] -> 1 
+           xs -> case maxList xs of 
+                   (m,ls) -> freshList' m ls  
 
+
+{-@ reflect domList @-}
+{-@ domList :: g:Env -> {v:[Var] | dom g == fromList v } @-}
+domList :: Env -> [Var]
+domList EEmp          = []
+domList (EBind x _ g) = x:domList g 
+
+{-@ reflect freshList' @-}
+{-@ freshList' :: x:Int -> xs:[{v:Int | v <= x}] -> {v:Int | v == x+1 && not (member v (fromList xs))}  @-}
+freshList' :: Int -> [Int] -> Int 
+freshList' x [] = x + 1 
+freshList' x (y:ys) = freshList' x ys  
+
+
+{-@ reflect maxList @-}
+maxList :: Ord a => [a] -> (a,[a])
+{-@ maxList :: i:{[a] | 0 < len i } -> (m::a, {o:[{v:a | v <= m }] | o == i} )@-}
+maxList [x] = (x,[x])
+maxList (x:xs) = case maxList xs of 
+    (m,ys) -> if m < x then (x,x:ys) else (m,x:ys)
 
 
 {-@ reflect lookupUEnv @-}
