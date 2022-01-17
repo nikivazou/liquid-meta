@@ -1,6 +1,5 @@
 {-@ LIQUID "--reflection"        @-}
 {-@ LIQUID "--ple"               @-}
-{- LIQUID "--no-termination"    @-}
 {-@ LIQUID "--max-case-expand=5" @-}
 module Theorem where 
 
@@ -9,16 +8,22 @@ import Propositions
 import Expressions 
 import Environments
 import Types 
+import Unrefine
 import Constants 
 import Substitutions.Expressions 
+import Substitutions.Environment 
 import Substitutions.Types
 
 import Helpers.ProofCombinators
 
+import WellFormed (wellformedTFunArg, wellformedTFunRes)
 import Lemmata.ValuesDontStep
+import Lemmata.CanonicalForm
+import Lemmata.WellFormedTyped (typed)
 import qualified Lemmata.Substitution
+import qualified Lemmata.Inversion
 import Lemmata.Subtyping
-import Lemmata.Narrowing.HasType
+import qualified Lemmata.Narrowing
 import Assumptions.Constants
 
 soundness :: Expr -> Type -> HasType -> Expr -> Evals -> Either () (Expr, Step) 
@@ -37,13 +42,13 @@ progress :: Expr -> Type -> HasType -> Either () (Expr, Step)
                  / [hasTypeSize ht] @-}
 progress (EApp e ex) _ (TApp _ _ _ t x tx e_hastype_txt ex_hastype_tx)
   = Right (progressApp e ex t x tx e_hastype_txt ex_hastype_tx)  
-progress _ _ (TLam _ _ _ _ _ _)
+progress _ _ (TLam _ _ _ _ _ _ _)
   = Left () 
-progress _ _ (TVar _ _ _ )
+progress _ _ (TVar _ _)
   = error "impossible" 
 progress _ _ (TCon _ _)
   = Left () 
-progress e _ (TSub _ _ s _ e_hastype_s _)
+progress e _ (TSub _ _ s _ e_hastype_s _ _)
   = progress e s e_hastype_s  
 
 {-@ progressApp :: e:Expr -> ex:Expr -> t:Type -> x:Var -> tx:Type 
@@ -55,33 +60,28 @@ progressApp :: Expr -> Expr -> Type -> Var -> Type -> HasType -> HasType -> (Exp
 progressApp e ex t x tx e_hastype_txt ex_hastype_tx 
   = case progress e (TFun x tx t) e_hastype_txt of 
       Left _ -> case progress ex tx ex_hastype_tx of 
-                 Left _ -> case canonicalForm x tx t e e_hastype_txt of 
+                 Left _ -> case Lemmata.CanonicalForm.lam x tx t e e_hastype_txt of 
                              Left (x,ee) -> (Substitutions.Expressions.subst ee x ex, SAppEL x ee ex)  
                              Right p     -> (delta p ex, SAppEP p ex)  
                  Right (ex', ex_step_ex') -> (EApp e ex', SAppPR e ex ex' ex_step_ex') 
       Right (e',e_step_e') -> (EApp e' ex, SAppPL e e' ex e_step_e')   
 
 
-{-@ canonicalForm :: x:Var -> tx:Type -> t:Type -> v:{Expr | isValue v } 
-                  -> Prop (HasType EEmp v (TFun x tx t)) 
-                  -> Either ((Var, Expr)<{\x e -> v == ELam x e}>) {p:EPrim | v == EPrim p } @-}
-canonicalForm :: Var -> Type -> Type -> Expr -> HasType -> Either (Var,Expr) EPrim
-canonicalForm _ _ _ (ELam x e) _ = Left (x,e)
-canonicalForm _ _ _ (EPrim c)  _ = Right c 
-canonicalForm _ _ _ _ _ = error ""
+
 
 preservation :: Expr -> Type -> HasType -> Expr -> Step -> HasType 
 {-@ preservation :: e:Expr -> t:Type -> hs:Prop (HasType EEmp e t) 
                  -> e':Expr -> Prop (Step e e') 
                  -> Prop (HasType EEmp e' t) 
                  /  [hasTypeSize hs] @-}
-preservation e t (TSub _ _ s _ e_hastype_s s_issub_t) e' e_step_e' 
+preservation e t p@(TSub _ _ s _ e_hastype_s s_issub_t _) e' e_step_e' 
   = TSub EEmp e' s t (preservation e s e_hastype_s e' e_step_e') s_issub_t 
+         (typed EEmp e t WFEEmp p)
 preservation e t (TCon _ _) e' e_step_e' 
   = values_dont_step e e' e_step_e'
-preservation e t (TLam _ _ _ _ _ _) e' e_step_e' 
+preservation e t (TLam _ _ _ _ _ _ _) e' e_step_e' 
   = values_dont_step e e' e_step_e'
-preservation (EVar x) t (TVar _ _ _) e' e_step_e' 
+preservation (EVar x) t (TVar _ _) e' e_step_e' 
   = error "empty-environment" 
 preservation (EApp e ex) (TEx _ _ t) (TApp EEmp _e _ex _t x tx e_hastype_txt ex_hastype_tx) e' e_step_e' 
   = preservationApp e ex t x tx e_hastype_txt ex_hastype_tx e' e_step_e'
@@ -99,78 +99,80 @@ preservationApp e ex t x tx e_hastype ex_hastype _ (SAppPL _e e' _ex e_step_e')
 preservationApp e ex t x tx e_hastype ex_hastype e' (SAppPR _ _ ex' ex_step_ex')
   = TApp EEmp e ex' t x tx e_hastype (preservation ex tx ex_hastype ex' ex_step_ex') 
 preservationApp e@(ELam y ee){-(ELam x e)-} _ex t x tx e_hastype ex_hastype e' step@(SAppEL _x _ee ex) | x == y 
-  = Lemmata.Substitution.expressions EEmp EEmp x ex tx ee t ex_hastype (
-     inverseLam EEmp x ee tx t e_hastype)
-preservationApp e@(ELam y ee){-(ELam x e)-} _ex t x tx e_hastype ex_hastype e' step@(SAppEL _x _ee ex)  =  inverseLam' EEmp y x ee tx t e_hastype ? error ""
+  = TSub EEmp e' t' tex (
+    assertProp (HasType EEmp e' t') (
+      Lemmata.Substitution.expressions EEmp EEmp x ex tx ee t 
+        -- (wf_emp (EBind x tx EEmp) xtx_wf)
+        xtx_wf
+        ex_hastype 
+        (Lemmata.Inversion.lam EEmp x ee tx t WFEEmp e_hastype)
+    )
+  ) (assertProp (IsSubType EEmp t' tex) (
+    SWit EEmp x tx ex t' t ex_hastype (subtypeId EEmp t' tt_wf)
+  )) tex_wf
+   where 
+     e' = Substitutions.Expressions.subst ee x ex
+     t' = Substitutions.Types.subst t x ex 
+     tex = TEx x tx t 
+     tx_wf  = assertProp (IsWellFormed EEmp tx) (typed EEmp ex tx WFEEmp ex_hastype) 
+     t_wf   = assertProp (IsWellFormed (EBind x tx EEmp) t) (
+                 wellformedTFunRes EEmp x tx t (typed EEmp e (TFun x tx t) WFEEmp e_hastype)
+                 ) 
+     xtx_wf = assertProp (WellFormedEnv (EBind x tx EEmp)) (WFFBnd EEmp x tx tx_wf WFEEmp) 
+     tt_wf  = assertProp (IsWellFormed EEmp t') (Lemmata.Substitution.wellformedness EEmp EEmp x ex tx t xtx_wf ex_hastype t_wf) 
+     tex_wf = assertProp (IsWellFormed EEmp tex) (WFEx EEmp x tx t tx_wf t_wf) 
+preservationApp e@(ELam y ee){-(ELam x e)-} _ex t x tx e_hastype ex_hastype e' step@(SAppEL _x _ee ex)  
+  = Lemmata.Inversion.lamSameName EEmp y x ee tx t WFEEmp e_hastype ? error ""
 
-preservationApp _ _ t x tx e_hastype ex_hastype e' (SAppEP p ex)
-  = case inverseCon EEmp p (TFun x tx t) e_hastype of 
---       TCon _ _  -> primAss x tx t p ex EEmp ex_hastype
+preservationApp e _ t x tx e_hastype ex_hastype e' (SAppEP p ex)
+  = case Lemmata.Inversion.prim EEmp p (TFun x tx t) WFEEmp e_hastype of 
       SFun _g x sx _tx s _t tx_issub_sx s_issub_t
-        -> exLemma x ex e' tx s t ex_hastype s_issub_t (
+        -> exLemma x ex e' tx s t ex_hastype (typed EEmp e (TFun x tx t) WFEEmp e_hastype) 
+            (assertProp (IsWellFormed (EBind x tx EEmp) s) (
+              Lemmata.Narrowing.iswellformed EEmp EEmp x tx sx s tx_issub_sx 
+                 (assertProp (IsWellFormed (EBind x sx EEmp) s) (
+                   wellformedTFunRes EEmp x sx s (primWellFormed EEmp p WFEEmp)
+                 ))
+            ) )
+             s_issub_t (
             assertProp (HasType EEmp e' (Substitutions.Types.subst s x ex)) (
               primAss x sx s p ex EEmp ( -- primtType p == TFun x sx s 
-                assertProp (HasType EEmp ex sx) (TSub EEmp ex tx sx ex_hastype tx_issub_sx)
+                assertProp (HasType EEmp ex sx) (
+                  TSub EEmp ex tx sx ex_hastype tx_issub_sx 
+                   (assertProp (IsWellFormed EEmp sx) (
+                     wellformedTFunArg EEmp x sx s (primWellFormed EEmp p WFEEmp)
+                   )))
               )
             )
         )   
-      _ -> undefined
+      _ -> noTEx p ? error "impossible"
 
 {-@ exLemma ::  x:Var -> ex:Expr -> e:Expr -> tx:Type -> s:Type -> t:Type 
              -> Prop (HasType EEmp ex tx)
+             -> Prop (IsWellFormed EEmp (TFun x tx t))
+             -> Prop (IsWellFormed (EBind x tx EEmp) s)
              -> Prop (IsSubType (EBind x tx EEmp) s t)
              -> Prop (HasType EEmp e (Substitutions.Types.subst s x ex))
              -> Prop (HasType EEmp e (TEx x tx t)) @-}
-exLemma :: Var -> Expr -> Expr -> Type -> Type -> Type -> HasType -> IsSubType -> HasType  -> HasType
-exLemma x ex e tx s t ex_hastype_tx s_issub_t e_hastype_s 
+exLemma :: Var -> Expr -> Expr -> Type -> Type -> Type -> HasType -> IsWellFormed -> IsWellFormed -> IsSubType -> HasType  -> HasType
+exLemma x ex e tx s t ex_hastype_tx txt_wf s_wf s_issub_t e_hastype_s 
   = assertProp (HasType EEmp e (TEx x tx t)) (
       TSub EEmp e (Substitutions.Types.subst s x ex) (TEx x tx t) e_hastype_s (
        assertProp (IsSubType EEmp (Substitutions.Types.subst s x ex) (TEx x tx t)) (
          SWit EEmp x tx ex (Substitutions.Types.subst s x ex) t ex_hastype_tx (
-           Lemmata.Substitution.types EEmp EEmp x ex tx s t ex_hastype_tx s_issub_t
+           Lemmata.Substitution.subtyping EEmp EEmp x ex tx s t 
+            xtx_g_wf 
+            ex_hastype_tx 
+            (assertProp (IsWellFormed (eAppend EEmp (EBind x tx EEmp)) s) s_wf)
+            t_wf
+            s_issub_t
          )  
        )
-     )
+     ) (assertProp (IsWellFormed EEmp (TEx x tx t)) (WFEx EEmp x tx t tx_wf t_wf))
       )
-
-
-{-@ inverseCon :: g:Env -> p:EPrim -> t:Type 
-               -> Prop (HasType g (EPrim p) t) 
-               -> Prop (IsSubType g (primType p) t ) @-}
-inverseCon :: Env -> EPrim -> Type -> HasType -> IsSubType
-inverseCon g p t (TCon _ _ ) = undefined -- subtypeId g t 
-inverseCon g p t (TSub _ _ s _t p_hastype_s s_subtype_t) 
-  = undefined -- subtypeTrans g (primType p) s t (inverseCon g p s p_hastype_s) s_subtype_t  
-
-
-
-
-{-@ inverseLam' :: g:Env -> y:Var -> x:Var -> e:Expr -> tx:Type -> t:Type 
-           -> Prop (HasType g (ELam y e) (TFun x tx t))
-           -> {  x == y} @-}
-inverseLam' :: Env -> Var -> Var -> Expr -> Type -> Type -> HasType -> () 
-inverseLam' g y x e tx t (TLam _ _ _ _ _ _) = () 
-inverseLam' g y x e tx t (TSub _ _ _ _ e_hastype_s (SFun _ _ sx _ s _ _ _)) = 
-  inverseLam' g y x e sx s e_hastype_s  
-inverseLam' g y x e tx t (TSub _ _ _ _ e_hastype_s _) = undefined  
-
-{-@ inverseLam :: g:Env -> x:Var -> e:Expr -> tx:Type -> t:Type 
-           -> ht:Prop (HasType g (ELam x e) (TFun x tx t))
-           -> Prop (HasType (EBind x tx g) e t) / [hasTypeSize ht] @-}
-inverseLam :: Env -> Var -> Expr -> Type -> Type -> HasType -> HasType 
-inverseLam g x e tx t (TLam _g _x _e _tx _t e_hastype_t) 
-  = e_hastype_t
-inverseLam g _x e tx t (TSub _ _e ss _ e_hastype_s (
-      SFun _g x sx _tx s _t tx_issub_sx s_issub_t
-  ))
-  = TSub (EBind x tx g) e s t (
-      assertProp (HasType (EBind x tx g) e s) (
-        narrowing EEmp g x tx sx s e tx_issub_sx (
-          assertProp (HasType (EBind x sx g) e s)
-           (inverseLam g x e sx s 
-           (assertProp (HasType g (ELam x e) (TFun x sx s)) e_hastype_s)
-           )
-        )
-      )) s_issub_t
-inverseLam g _x e tx t (TSub _ _e ss _ e_hastype_s _)
-  = undefined 
+  where 
+    xtx_g_wf = assertProp (WellFormedEnv (eAppend EEmp (EBind x tx EEmp))) (
+                 WFFBnd EEmp x tx (typed EEmp ex tx WFEEmp ex_hastype_tx) WFEEmp
+               )
+    t_wf = assertProp (IsWellFormed (eAppend EEmp (EBind x tx EEmp)) t) (wellformedTFunRes EEmp x tx t txt_wf)
+    tx_wf = typed EEmp ex tx WFEEmp ex_hastype_tx

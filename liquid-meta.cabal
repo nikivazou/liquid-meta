@@ -14,22 +14,28 @@ library
   exposed-modules:
       Helpers.ProofCombinators
       Syntax,
+      Unrefine, 
       Constants, 
       Expressions, 
       Types, 
       WellFormed, 
+      Assumptions.Constants,
       Substitutions.Expressions,
       Substitutions.Types,
+      Substitutions.Environment,
       Substitutions.Implies,
       Environments, 
       Propositions, 
       Lemmata.ValuesDontStep,
+      SystemF.Properties, 
+      Lemmata.WellFormedTyped,
+      Lemmata.Unrefine,
+      Lemmata.Inversion,
+      Lemmata.CanonicalForm,
       Lemmata.Substitution,
       Lemmata.Weakening,
-      Lemmata.Narrowing.HasType,
-      Lemmata.Narrowing.Subtype,
-      Lemmata.Subtyping,
-      Assumptions.Constants,
+      Lemmata.Narrowing,
+      Lemmata.Subtyping
       Theorem  
   hs-source-dirs:
       src
