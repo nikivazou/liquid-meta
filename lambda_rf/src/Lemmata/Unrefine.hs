@@ -9,6 +9,7 @@ import Environments
 import Constants
 import Unrefine 
 import Expressions
+import qualified Expressions as E
 import Substitutions.Expressions
 import Substitutions.Types
 
@@ -20,7 +21,7 @@ import Helpers.ProofCombinators
 
 uwellformed :: UEnv -> Expr -> FType -> HasTypeF -> ()
 {-@ uwellformed :: g:UEnv -> e:Expr -> t:FType -> Prop (HasTypeF g e t) 
-               -> { intersection (udom g) (boundVars e) == empty } @-}
+               -> { intersection (udom g) (E.boundVars e) == empty } @-}
 uwellformed _ _ _ (FTLam g x e tx t e_hastype)
   = uwellformed (UEBind x tx g) e t e_hastype 
 uwellformed _ _ _ (FTApp g e ex tx t e_hastype ex_hastype_tx) 

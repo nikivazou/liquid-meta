@@ -11,10 +11,15 @@ import Helpers.ProofCombinators
 import Data.Set 
 import Types 
 
+{-@ inline subable @-}
+subable :: Expr -> Type -> Bool 
+subable ex t = E.disjoined (boundVars t) (E.freeVars ex)
+
+
 {-@ ignore subst @-}
 {-@ reflect subst @-}
 subst :: Type -> Var -> Expr -> Type 
-{-@ subst :: t:Type -> x:AnyVar -> ex:Expr 
+{-@ subst :: t:Type -> x:AnyVar -> ex:{Expr | subable ex t} 
           -> {r:Type | if (member x (freeVars t)) 
                          then (isSubsetOf (freeVars r) (union (difference (freeVars t) (singleton x)) (E.freeVars ex)))
                          else (r == t) } @-} 
@@ -36,11 +41,11 @@ substId (TBase _ (Predicate _ e)) x = E.substId e x
 substId (TFun _ t1 t2) x = substId t1 x ? substId t2 x  
 substId (TEx  _ t1 t2) x = substId t1 x ? substId t2 x  
 
-
 {-@ ple substFlip @-}
 {-@ substFlip :: t:Type -> x:Var -> ex:Expr 
               -> y:{Var | y /= x && not (member y (boundVars t))} 
-              -> ey:{Expr | not (member x (E.freeVars ey))} 
+              -> ey:{Expr | not (member x (E.freeVars ey))
+                         && subable ey t && E.subable ey ex && subable (E.subst ex y ey) (subst t y ey) && E.subable ey ex } 
               -> { subst (subst t y ey) x (E.subst ex y ey) == subst (subst t x ex) y ey} @-}
 substFlip :: Type -> Var -> Expr -> Var -> Expr -> ()
 substFlip (TEx z tz tt)  x ex y ey | z == y 

@@ -4,13 +4,19 @@
 module Substitutions.Environment where 
 
 import Syntax 
-import qualified Substitutions.Types as T
-import qualified Substitutions.Expressions 
+import qualified Substitutions.Types       as T
+import qualified Expressions as E  
+import qualified Substitutions.Expressions as E  
 import Environments
 import Data.Set 
 
+{-@ inline subable @-}
+subable :: Expr -> Env -> Bool 
+subable ex g = E.disjoined (boundVars g) (E.freeVars ex)
+
+
 {-@ reflect subst @-}
-{-@ subst :: g:Env -> Var  -> Expr 
+{-@ subst :: g:Env -> Var  -> ex:{Expr | subable ex g } 
           -> {o:Env | dom o == dom g} @-}
 subst :: Env -> Var -> Expr -> Env 
 subst EEmp _ _            = EEmp 

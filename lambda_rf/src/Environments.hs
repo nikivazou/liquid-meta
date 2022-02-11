@@ -3,9 +3,16 @@
 
 module Environments where 
 import Syntax 
+import qualified Types
 import Data.Set 
 
 import Helpers.ProofCombinators 
+
+{-@ measure boundVars @-}
+boundVars :: Env -> Set Var 
+boundVars EEmp = empty 
+boundVars (EBind x tx g) = union (Types.boundVars tx) (boundVars g)
+
 
 {-@ reflect inEnv @-}
 inEnv :: Var -> Type -> Env -> Bool 

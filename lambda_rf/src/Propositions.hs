@@ -84,7 +84,7 @@ data IsWellFormed where
 {-@ data IsWellFormed where 
      WFBs  :: g:Env -> b:TPrim 
            -> p:{Expr | isSubsetOf (Expressions.freeVars p) (union (singleton pvar) (dom g))}
-           -> x:{Var | not (member x (dom g)) && not (member x (freeVars p))} 
+           -> x:{Var | not (member x (dom g)) && not (member x (freeVars p)) && not (member x (Expressions.boundVars p)) } 
            -> Prop (HasTypeF (UEBind x (FTBase b) (Unrefine.uenv g)) (Substitutions.Expressions.subst p pvar (EVar x)) (FTBase TBool) )
            -> Prop (IsWellFormed g (TBase (TPrim b) (Predicate pvar p)))
      WFFun :: g:Env -> x:{Var | not (member x (dom g))} -> tx:Type -> t:Type 
@@ -156,7 +156,8 @@ data IsSubType where
            -> Prop (IsSubType g s2 s1)
            -> Prop (IsSubType (EBind x s2 g) t1 t2)
            -> Prop (IsSubType g (TFun x s1 t1) (TFun x s2 t2)) 
-     SWit  :: g:Env -> x:Var -> tx:Type -> ex:Expr -> s:Type -> t:Type 
+     SWit  :: g:Env -> x:Var -> tx:Type -> ex:Expr -> s:Type 
+           -> t:{Type | Substitutions.Types.subable ex t } 
            -> Prop (HasType g ex tx)
            -> Prop (IsSubType g s (Substitutions.Types.subst t x ex))
            -> Prop (IsSubType g s (TEx x tx t)) 

@@ -25,7 +25,9 @@ import Data.Set
 
 {-@ wellformedness :: g1:Env -> g2:{Env | intersection (dom g1) (dom g2) == empty} 
                    -> x:{Var | not (member x (union (dom g1) (dom g2)))} 
-                   -> ex:Expr -> tx:Type -> t:Type 
+                   -> ex:{Expr | Substitutions.Environment.subable ex g1 }
+                   -> tx:Type 
+                   -> t:{Type | Substitutions.Types.subable ex t } 
                    -> Prop (WellFormedEnv (eAppend g1 (EBind x tx g2)))
                    -> Prop (HasType g2 ex tx)
                    -> wf:Prop (IsWellFormed (eAppend g1 (EBind x tx g2)) t) 
@@ -37,6 +39,11 @@ wellformedness g1 g2 y ey ty _ wf ey_hastype_ty (WFBs _ b p x p_hastype_bool)
   = (not (member x (dom g))) 
   ? (not (member pvar (dom g2)))
   ? wellformed' g2 ey ty (wellFormedPostFix g1 g2 y ty wf) ey_hastype_ty 
+  ? assert (Substitutions.Expressions.subable ey p) 
+  ? assert (Substitutions.Expressions.subable ey (EVar x)) 
+  -- ? assume ( x /= y )
+  -- ? assume (Substitutions.Expressions.subst (EVar x) y ey == EVar x)
+  ? assume (Substitutions.Expressions.subable (Substitutions.Expressions.subst (EVar x) y ey) (Substitutions.Expressions.subst p y ey))
   ? Substitutions.Expressions.substFlip p pvar (EVar x) y ey 
   ? uenvSubst g1 y ey 
   ? uenvAppend (Substitutions.Environment.subst g1 y ey) g2 
@@ -80,7 +87,10 @@ wellformedness g1 g2 y ey ty _ wf ey_hastype_ty (WFEx  _ x tx t tx_wf t_wf)
 
 {-@ subtyping :: g1:Env -> g2:{Env | intersection (dom g1) (dom g2) == empty} 
                 -> x:{Var | not (member x (union (dom g1) (dom g2)))} 
-                -> ex:Expr -> tx:Type -> s:Type -> t:Type 
+                -> ex:{Expr | Substitutions.Environment.subable ex g1 }
+                -> tx:Type 
+                -> s:{ Type | Substitutions.Types.subable ex s } 
+                -> t:{ Type | Substitutions.Types.subable ex t } 
                 -> Prop (WellFormedEnv (eAppend g1 (EBind x tx g2)))
                 -> Prop (HasType g2 ex tx)
                 -> Prop (IsWellFormed (eAppend g1 (EBind x tx g2)) s)
@@ -132,7 +142,12 @@ subtyping g1 g2 y ey ty _ _ wf ey_hastype_ty s_wf tt_wf (SWit _ x tx ex s t ex_h
        wellformed (EBind x tx g) t t_wf ? 
        assert (intersection (dom (EBind x tx g)) (Types.boundVars t) == empty) ? 
        assert (member y (dom (EBind x tx g))) ? 
-       assert (not (member y (Types.boundVars t))) ? 
+       assert (not (member y (Types.boundVars t))) ?
+       assume (Substitutions.Types.subable ey t_xex) ?
+       assume (Substitutions.Expressions.subable ey ex) ?
+       assume (Substitutions.Types.subable ey t') ?
+       assume (Substitutions.Types.subable ey t) ?
+       assume (Substitutions.Types.subable (Substitutions.Expressions.subst ex y ey) (Substitutions.Types.subst t y ey)) ?
 --        assert (not (member y (Expressions.freeVars ex)))?
        Substitutions.Types.substFlip t x ex y ey ? 
        SWit g' x tx' ex' s' t' 
@@ -144,7 +159,7 @@ subtyping g1 g2 y ey ty _ _ wf ey_hastype_ty s_wf tt_wf (SWit _ x tx ex s t ex_h
           ) s_issub_t)
   where 
    tx' = Substitutions.Types.subst tx y ey
-   ex' = Substitutions.Expressions.subst ex y ey
+   ex' = Substitutions.Expressions.subst ex y (assume (Substitutions.Expressions.subable ey ex) ? ey)
    t'  = Substitutions.Types.subst t y ey
    t_xex  = Substitutions.Types.subst t x ex
    s'  = Substitutions.Types.subst s y ey
@@ -182,8 +197,11 @@ subtyping g1 g2 y ey ty ss _ wf ey_hastype_ty ss_wf t_wf (SBnd _ x sx s t s_issu
    g   = eAppend g1 (EBind y ty g2)
 
 {-@ expressions :: g1:Env -> g2:{Env | intersection (dom g1) (dom g2) == empty} 
-                -> x:{Var | not (member x (union (dom g1) (dom g2)))} 
-                -> ex:Expr -> tx:Type -> e:Expr -> t:Type 
+                -> x:{ Var | not (member x (union (dom g1) (dom g2)))} 
+                -> ex:{ Expr | Substitutions.Environment.subable ex g1 } 
+                -> tx:Type 
+                -> e:{ Expr | Substitutions.Expressions.subable ex e} 
+                -> t:{ Type | Substitutions.Types.subable ex t}  
                 -> Prop (WellFormedEnv (eAppend g1 (EBind x tx g2)))
                 -> Prop (HasType g2 ex tx)
                 -> ht:Prop (HasType (eAppend g1 (EBind x tx g2)) e t) 
@@ -193,7 +211,10 @@ subtyping g1 g2 y ey ty ss _ wf ey_hastype_ty ss_wf t_wf (SBnd _ x sx s t s_issu
                 / [hasTypeSize ht] @-}
 expressions :: Env -> Env -> Var -> Expr -> Type -> Expr -> Type -> WellFormedEnv -> HasType -> HasType -> HasType 
 expressions g1 g2 y ey ty e _ wf ey_hastype_ty (TSub _ _ s t e_hastype_s s_subtype_t t_wf)
-  = TSub g' e' s' t' 
+  = wellformed g s s_wf
+  ? assume (disjoined (Expressions.boundVars e) (dom g))
+  ? assume (disjoined (Types.boundVars s) (dom g))
+  ? TSub g' e' (Substitutions.Types.subst s y ey) t' 
       (expressions g1 g2 y ey ty e s wf ey_hastype_ty e_hastype_s)
       (subtyping   g1 g2 y ey ty s t wf ey_hastype_ty 
                    s_wf 
@@ -201,10 +222,10 @@ expressions g1 g2 y ey ty e _ wf ey_hastype_ty (TSub _ _ s t e_hastype_s s_subty
                    s_subtype_t)  
       (wellformedness g1 g2 y ey ty t wf ey_hastype_ty t_wf)
   where 
-   s_wf = (typed (eAppend g1 (EBind y ty g2)) e s wf e_hastype_s)
+   s_wf = typed g e s wf e_hastype_s
    e' = Substitutions.Expressions.subst e y ey
+   g  = eAppend g1 (EBind y ty g2)
    g' = eAppend (Substitutions.Environment.subst g1 y ey) g2
-   s' = Substitutions.Types.subst s y ey
    t' = Substitutions.Types.subst t y ey
 expressions g1 g2 y ey ty _ _ g_wf ey_hastype_ty (TApp _ e ex t x tx e_hastype_txt ex_hastype_tx)
   = wellformedFun (eAppend g1 (EBind y ty g2)) e x tx t g_wf e_hastype_txt
@@ -243,8 +264,10 @@ expressions g1 g2 y ey _ _ t _ _ (TCon _ p)
 
 {-@ exprVar :: g1:Env -> g2:{Env | intersection (dom g1) (dom g2) == empty} 
             -> x:{Var | not (member x (union (dom g1) (dom g2)))} 
-            -> ex:Expr -> tx:Type -> e:{Var | member e (dom (eAppend g1 (EBind x tx g2)))} 
-            -> t:{Type | t == lookupEnv (eAppend g1 (EBind x tx g2)) e} 
+            -> ex:{ Expr | Substitutions.Environment.subable ex g1 } 
+            -> tx:Type 
+            -> e:{Var | member e (dom (eAppend g1 (EBind x tx g2))) && Substitutions.Expressions.subable ex (EVar e) } 
+            -> t:{Type | t == lookupEnv (eAppend g1 (EBind x tx g2)) e &&  Substitutions.Types.subable ex t } 
             -> Prop (WellFormedEnv (eAppend g1 (EBind x tx g2)))
             -> Prop (HasType g2 ex tx)
             -> Prop (HasType (eAppend (Substitutions.Environment.subst g1 x ex) g2) 
